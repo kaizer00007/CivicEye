@@ -1,0 +1,78 @@
+{
+  "scenario_1_triage": {
+    "issue_type": "pothole",
+    "severity": 6,
+    "urgency": "high",
+    "department": "public_works",
+    "estimated_fix_days": 3,
+    "safety_risk": true,
+    "affects_traffic": true,
+    "description": "Deep asphalt crater on dual-carriageway road. Poses sharp wheel rim impact risk and two-wheeler skid hazard."
+  },
+  "scenario_1_verify": {
+    "same_location": true,
+    "issue_resolved": true,
+    "confidence": 92,
+    "explanation": "Image 2 shows the exact same road section, verified by curb landmark and asphalt edge geometry. The pothole has been fully backfilled with asphalt aggregate, rolled flat, and edge-sealed.",
+    "red_flags": []
+  },
+  "scenario_2_triage": {
+    "issue_type": "road_damage",
+    "severity": 7,
+    "urgency": "high",
+    "department": "public_works",
+    "estimated_fix_days": 3,
+    "safety_risk": true,
+    "affects_traffic": true,
+    "description": "Severe road surface breakup with loose gravel and surface subsidence."
+  },
+  "scenario_2_verify": {
+    "same_location": false,
+    "issue_resolved": false,
+    "confidence": 20,
+    "explanation": "Image 2 fails location matching: road markings, building facade in background, and asphalt grain do not correspond to Image 1. Detected as an unrelated clean road surface.",
+    "red_flags": ["unrelated_location", "visual_landmarks_mismatch"]
+  },
+  "scenario_3_triage": {
+    "issue_type": "garbage_dump",
+    "severity": 5,
+    "urgency": "medium",
+    "department": "sanitation",
+    "estimated_fix_days": 2,
+    "safety_risk": false,
+    "affects_traffic": false,
+    "description": "Solid municipal waste overflow around commercial area bin causing foul odor and pedestrian walkway blockage."
+  },
+  "scenario_3_verify": {
+    "same_location": true,
+    "issue_resolved": true,
+    "confidence": 64,
+    "explanation": "Bin area has been largely emptied, but significant scattered litter remains along curb perimeter. Classified as partial/borderline cleanup.",
+    "red_flags": ["partial_cleanup_remains"]
+  },
+  "scenario_4_triage": {
+    "issue_type": "water_leak",
+    "severity": 9,
+    "urgency": "critical",
+    "department": "water_board",
+    "estimated_fix_days": 1,
+    "safety_risk": true,
+    "affects_traffic": true,
+    "description": "High-pressure potable water main fractured. Water jet flooding entire road junction with rapid erosion of road foundation."
+  },
+  "scenario_5_triage": {
+    "issue_type": "pothole",
+    "severity": 6,
+    "urgency": "high",
+    "department": "public_works",
+    "estimated_fix_days": 3,
+    "safety_risk": true,
+    "affects_traffic": true,
+    "description": "Hazardous road pothole near junction crossing reported by secondary commuter."
+  },
+  "scenario_7_voice": {
+    "transcript": "सड़क पर गहरा गड्ढा है, बारिश का पानी भर गया है, तुरंत मरम्मत की आवश्यकता है",
+    "language": "hi-IN",
+    "translatedSummary": "Deep pothole on the road filled with rainwater, immediate repair needed."
+  }
+}

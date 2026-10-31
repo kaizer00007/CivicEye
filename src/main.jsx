@@ -1,0 +1,21 @@
+/**
+ * main.jsx — React app entry point.
+ * Wraps App with AuthProvider and ToastProvider.
+ */
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import { AuthProvider } from './contexts/AuthContext';
+import { ToastProvider } from './contexts/ToastContext';
+import 'leaflet/dist/leaflet.css';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <ToastProvider>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </ToastProvider>
+  </React.StrictMode>
+);

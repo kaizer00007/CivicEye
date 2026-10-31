@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Leaflet CSS is imported in main.jsx */
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 3px;
+}
+
+/* Smooth page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms, transform 200ms;
+}
+
+/* Loading pulse animation */
+@keyframes civic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.civic-pulse {
+  animation: civic-pulse 1.5s ease-in-out infinite;
+}
+
+/* Map container needs explicit height */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* AI scanner beam animation for report analysis */
+@keyframes scan {
+  0%   { top: 0; }
+  50%  { top: 100%; }
+  100% { top: 0; }
+}
+
+/* Modal scale-in animation */
+@keyframes scale-in {
+  0%   { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+
+/* Toast slide-in */
+@keyframes slide-in {
+  0%   { transform: translateX(100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+.animate-slide-in {
+  animation: slide-in 0.25s ease-out;
+}
