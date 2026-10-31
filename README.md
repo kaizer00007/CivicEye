@@ -178,9 +178,12 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=123456789012
 VITE_FIREBASE_APP_ID=1:...
 
 VITE_GEMINI_KEY=your_gemini_api_key
-VITE_GEMINI_MODEL=gemini-2.0-flash
+VITE_GEMINI_MODEL=gemini-3.8-flash
 VITE_SEED_ENABLED=true
 ```
+
+> [!TIP]
+> **Gemini Active Model**: Check your current supported model names in [Google AI Studio](https://aistudio.google.com/). CivicEye defaults to `gemini-3.8-flash` via `VITE_GEMINI_MODEL`. If any model is deprecated or returns a 404, CivicEye automatically cascades through the fallback list (`gemini-3.8-flash` → `gemini-3.7-flash` → `gemini-3.6-flash` → `gemini-3.5-flash`), remembers the first working model, and switches to Safe Mode cached responses if all models are exhausted.
 
 ### 3. Firebase Console Configuration (One-Time)
 1. **Enable Authentication**:

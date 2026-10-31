@@ -118,11 +118,13 @@ export default function ReportPage() {
       if (result.aiAnalyzed) {
         show('AI classification complete! Review and adjust if needed.', 'success');
       } else {
-        show('Default classification applied. You can edit any field.', 'info');
+        setAiError('AI analysis is temporarily unavailable, you can enter the details manually');
+        show('AI analysis is temporarily unavailable, you can enter the details manually', 'warning');
       }
     } catch (err) {
-      setAiError(err.message || 'AI analysis encountered an issue');
-      show('AI analysis failed. You can still enter details manually.', 'warning');
+      console.error('[CivicEye] AI analysis technical error:', err);
+      setAiError('AI analysis is temporarily unavailable, you can enter the details manually');
+      show('AI analysis is temporarily unavailable, you can enter the details manually', 'warning');
     } finally {
       setAnalyzing(false);
     }
@@ -391,12 +393,15 @@ export default function ReportPage() {
           )}
 
           {aiError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center justify-between">
-              <span>{aiError}</span>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center justify-between gap-2 shadow-sm">
+              <div className="flex items-center gap-2">
+                <span>⚠️</span>
+                <span>{aiError}</span>
+              </div>
               <button
                 type="button"
                 onClick={handleAnalyzeWithAi}
-                className="underline font-bold ml-2"
+                className="px-3 py-1 bg-amber-200/80 hover:bg-amber-200 rounded-lg font-bold text-amber-900 transition text-xs shrink-0"
               >
                 Retry
               </button>

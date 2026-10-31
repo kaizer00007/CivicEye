@@ -142,9 +142,9 @@ export async function callGeminiVerifyWithSafeMode(
       8000
     );
 
-    // If verification gave ai_error red flag (unreachable SDK), fall back
-    if (realResult.red_flags?.includes('ai_error')) {
-      throw new Error('Gemini verification returned ai_error');
+    // If verification gave ai_error red flag (unreachable SDK or models exhausted), fall back to cache
+    if (!realResult || realResult.red_flags?.includes('ai_error')) {
+      throw new Error('Gemini verification returned ai_error (fallback model exhausted)');
     }
 
     return {

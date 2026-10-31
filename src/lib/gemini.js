@@ -2,12 +2,36 @@
  * Gemini AI integration using the official @google/genai SDK.
  * Handles issue triage and proof resolution verification.
  * Always requests application/json, strips markdown fences, and uses safe fallbacks.
+ * 
+ * Includes automated multi-model fallback on 404/NOT_FOUND errors:
+ * VITE_GEMINI_MODEL -> gemini-3.8-flash -> gemini-3.7-flash -> gemini-3.6-flash -> gemini-3.5-flash
  */
 import { GoogleGenAI } from '@google/genai';
-import { CRITICAL_SEVERITY_THRESHOLD, ISSUE_TYPES, DEPARTMENTS } from '../config';
+import { CRITICAL_SEVERITY_THRESHOLD, ISSUE_TYPES, DEPARTMENTS } from '../config.js';
 
-const apiKey = import.meta.env.VITE_GEMINI_KEY || '';
-const modelName = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.0-flash';
+const apiKey =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_KEY) ||
+  (typeof process !== 'undefined' && process.env?.VITE_GEMINI_KEY) ||
+  '';
+const configuredModel =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_MODEL) ||
+  (typeof process !== 'undefined' && process.env?.VITE_GEMINI_MODEL) ||
+  'gemini-3.8-flash';
+
+// Priority model list: VITE_GEMINI_MODEL first, followed by fallbacks
+const FALLBACK_MODELS = [
+  configuredModel,
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+];
+
+// Deduplicate model names preserving order
+const MODEL_LIST = Array.from(new Set(FALLBACK_MODELS.filter(Boolean)));
+
+// Remember the first working model across calls
+let activeModel = MODEL_LIST[0];
 
 // Lazily initialized SDK instance
 let aiClient = null;
@@ -29,11 +53,106 @@ function getAiClient() {
 export function cleanJsonText(raw) {
   if (!raw) return '{}';
   let cleaned = raw.trim();
-  // Remove markdown code fences if present
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   }
   return cleaned.trim();
+}
+
+/**
+ * Checks whether an error indicates a 404 / NOT_FOUND / retired model.
+ */
+export function isNotFoundError(err) {
+  if (!err) return false;
+  const msg = String(err.message || '').toLowerCase();
+  const status = err.status || err.statusCode || (err.error && err.error.code);
+  return (
+    status === 404 ||
+    status === 503 ||
+    msg.includes('404') ||
+    msg.includes('503') ||
+    msg.includes('not_found') ||
+    msg.includes('not found') ||
+    msg.includes('no longer available') ||
+    msg.includes('unsupported model') ||
+    msg.includes('is not found') ||
+    msg.includes('unavailable') ||
+    msg.includes('high demand') ||
+    msg.includes('timed out')
+  );
+}
+
+function withTimeout(promise, timeoutMs = 12000) {
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Model timed out after ${timeoutMs / 1000}s`)), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
+/**
+ * Executes a Gemini generateContent call with structured JSON parsing.
+ * Tries models in priority order on 404 / NOT_FOUND errors and remembers
+ * the working model for subsequent calls.
+ * 
+ * @param {Array} contents 
+ * @param {Object} [config={}] 
+ * @returns {Promise<any>} Parsed JSON response
+ */
+export async function callJson(contents, config = {}) {
+  const ai = getAiClient();
+  if (!apiKey) {
+    throw new Error('VITE_GEMINI_KEY is not configured');
+  }
+
+  // Build candidate models order starting with the known working activeModel
+  const candidateModels = [
+    activeModel,
+    ...MODEL_LIST.filter((m) => m !== activeModel),
+  ];
+
+  let lastError = null;
+
+  for (const model of candidateModels) {
+    try {
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model,
+          contents,
+          config: {
+            responseMimeType: 'application/json',
+            ...config,
+          },
+        }),
+        12000
+      );
+
+      // Remember the working model for future calls
+      if (model !== activeModel) {
+        console.info(`[CivicEye] Active Gemini model switched to working model: "${model}"`);
+        activeModel = model;
+      }
+
+      const rawText = response.text || '';
+      const cleaned = cleanJsonText(rawText);
+      return JSON.parse(cleaned);
+    } catch (err) {
+      lastError = err;
+      if (isNotFoundError(err)) {
+        console.warn(`[CivicEye] Model "${model}" is unavailable (${err.message}). Trying next fallback model...`);
+        continue;
+      } else {
+        // Non-404 error (rate limit, network issue, or bad response)
+        console.error(`[CivicEye] Error on model "${model}":`, err.message);
+        throw err;
+      }
+    }
+  }
+
+  console.error('[CivicEye] All Gemini models in fallback list failed:', lastError?.message);
+  throw lastError || new Error('All Gemini fallback models exhausted');
 }
 
 /**
@@ -42,7 +161,7 @@ export function cleanJsonText(raw) {
 export const TRIAGE_FALLBACK = {
   issue_type: 'other',
   severity: 5,
-  description: 'Civic issue reported by citizen. AI automated triage unavailable.',
+  description: 'AI analysis is temporarily unavailable, you can enter the details manually',
   department: 'other',
   urgency: 'medium',
   estimated_fix_days: 7,
@@ -60,10 +179,13 @@ export const TRIAGE_FALLBACK = {
  */
 export async function triageCivicIssue(base64DataUrl, citizenNote = '') {
   try {
-    const ai = getAiClient();
     if (!apiKey) {
       console.warn('[CivicEye] Using triage fallback because VITE_GEMINI_KEY is not configured');
-      return { ...TRIAGE_FALLBACK, aiAnalyzed: false };
+      return {
+        ...TRIAGE_FALLBACK,
+        description: 'AI analysis is temporarily unavailable, you can enter the details manually',
+        aiAnalyzed: false,
+      };
     }
 
     // Extract base64 without prefix
@@ -89,30 +211,20 @@ Classify this image and return a JSON object with EXACTLY these fields:
 Return ONLY valid JSON matching this structure.
 `;
 
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: promptText },
-            {
-              inlineData: {
-                mimeType: 'image/jpeg',
-                data: base64Data,
-              },
+    const parsed = await callJson([
+      {
+        role: 'user',
+        parts: [
+          { text: promptText },
+          {
+            inlineData: {
+              mimeType: 'image/jpeg',
+              data: base64Data,
             },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: 'application/json',
+          },
+        ],
       },
-    });
-
-    const rawText = response.text || '';
-    const cleaned = cleanJsonText(rawText);
-    const parsed = JSON.parse(cleaned);
+    ]);
 
     // Validate and sanitize response
     const issue_type = ISSUE_TYPES.includes(parsed.issue_type) ? parsed.issue_type : 'other';
@@ -139,10 +251,10 @@ Return ONLY valid JSON matching this structure.
       aiAnalyzed: true,
     };
   } catch (err) {
-    console.error('[CivicEye] Gemini triage call error:', err.message);
+    console.error('[CivicEye] Gemini triage technical error:', err.message);
     return {
       ...TRIAGE_FALLBACK,
-      description: `Analysis notice: ${err.message || 'Gemini triage unavailable'}. You can specify details manually.`,
+      description: 'AI analysis is temporarily unavailable, you can enter the details manually',
       aiAnalyzed: false,
     };
   }
@@ -155,13 +267,13 @@ export const VERIFY_FALLBACK = {
   same_location: false,
   issue_resolved: false,
   confidence: 0,
-  explanation: 'AI verification service was unreachable or an error occurred. Sent to admin queue.',
+  explanation: 'AI verification service is temporarily unavailable. Sent to admin queue.',
   red_flags: ['ai_error'],
 };
 
 /**
  * Verifies resolution proof against original report photo.
- * Used in Phase 5 when officer submits completion evidence.
+ * Used when officer submits completion evidence.
  * 
  * @param {string} beforeDataUrl 
  * @param {string} afterDataUrl 
@@ -170,7 +282,6 @@ export const VERIFY_FALLBACK = {
  */
 export async function verifyResolutionProof(beforeDataUrl, afterDataUrl, issueType) {
   try {
-    const ai = getAiClient();
     if (!apiKey) {
       return VERIFY_FALLBACK;
     }
@@ -197,28 +308,18 @@ Return a JSON object with EXACTLY:
 Return ONLY valid JSON.
 `;
 
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: promptText },
-            { text: 'Image 1 (Original Report):' },
-            { inlineData: { mimeType: 'image/jpeg', data: beforeBase64 } },
-            { text: 'Image 2 (Claimed Fix):' },
-            { inlineData: { mimeType: 'image/jpeg', data: afterBase64 } },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: 'application/json',
+    const parsed = await callJson([
+      {
+        role: 'user',
+        parts: [
+          { text: promptText },
+          { text: 'Image 1 (Original Report):' },
+          { inlineData: { mimeType: 'image/jpeg', data: beforeBase64 } },
+          { text: 'Image 2 (Claimed Fix):' },
+          { inlineData: { mimeType: 'image/jpeg', data: afterBase64 } },
+        ],
       },
-    });
-
-    const raw = response.text || '';
-    const cleaned = cleanJsonText(raw);
-    const parsed = JSON.parse(cleaned);
+    ]);
 
     return {
       same_location: Boolean(parsed.same_location),
@@ -228,10 +329,10 @@ Return ONLY valid JSON.
       red_flags: Array.isArray(parsed.red_flags) ? parsed.red_flags : [],
     };
   } catch (err) {
-    console.error('[CivicEye] Gemini verification error:', err.message);
+    console.error('[CivicEye] Gemini verification technical error:', err.message);
     return {
       ...VERIFY_FALLBACK,
-      explanation: `Verification check error: ${err.message}`,
+      explanation: 'AI verification service is temporarily unavailable. Sent to admin queue.',
     };
   }
 }
