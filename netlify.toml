@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Serve index.html for client-side routes like /dashboard
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
